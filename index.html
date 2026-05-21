@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Canteen Order</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, sans-serif; background: #0f0f0f; color: #fff; min-height: 100vh; }
+        .header { background: #1a1a1a; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 18px; }
+        .page { display: none; padding: 14px 14px 80px; }
+        .page.active { display: block; }
+        .mic-area { display: flex; flex-direction: column; align-items: center; padding: 28px 0 16px; }
+        .mic-btn { width: 130px; height: 130px; border-radius: 50%; border: none; background: #e74c3c; cursor: pointer; font-size: 52px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; box-shadow: 0 4px 24px rgba(231,76,60,0.45); }
+        .mic-btn.listening { background: #c0392b; transform: scale(1.08); animation: pulse 1s infinite; }
+        .mic-btn.success { background: #27ae60; }
+        .mic-btn.cancel-flash { background: #e67e22; }
+        @keyframes pulse { 0%,100% { box-shadow: 0 4px 24px rgba(231,76,60,0.45); } 50% { box-shadow: 0 4px 48px rgba(231,76,60,0.9); } }
+        .status { text-align: center; margin: 10px 0 3px; color: #aaa; font-size: 14px; min-height: 20px; }
+        .heard-text { text-align: center; font-size: 20px; color: #3498db; min-height: 28px; margin: 3px 0 10px; font-style: italic; }
+        .confirm-box { background: #1e1e1e; border-radius: 14px; padding: 16px; margin: 4px 0 12px; display: none; border: 1px solid #333; }
+        .confirm-box.show { display: block; }
+        .confirm-item { font-size: 19px; margin-bottom: 14px; line-height: 1.5; }
+        .confirm-btns { display: flex; gap: 10px; }
+        .btn { padding: 11px 20px; border-radius: 9px; border: none; cursor: pointer; font-size: 14px; font-weight: 700; flex: 1; }
+        .btn-green { background: #27ae60; color: #fff; }
+        .btn-red { background: #e74c3c; color: #fff; }
+        .btn-gray { background: #2a2a2a; color: #ccc; border: 1px solid #444; }
+        .btn-blue { background: #3498db; color: #fff; }
+        .order-item { background: #1a1a1a; border-radius: 9px; padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; transition: opacity 0.2s; }
+        .order-item.cancelled { opacity: 0.45; }
+        .order-item.cancelled .order-name,
+        .order-item.cancelled .order-price { text-decoration: line-through; }
+        .order-name { font-size: 15px; font-weight: 600; }
+        .order-meta { font-size: 12px; color: #666; margin-top: 2px; }
+        .order-price { font-size: 16px; font-weight: 700; color: #2ecc71; }
+        .order-del { background: none; border: none; color: #555; font-size: 20px; cursor: pointer; padding: 2px 8px; }
+        .total-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #111; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #2a2a2a; }
+        .total-label { color: #777; font-size: 13px; }
+        .total-amount { font-size: 26px; font-weight: 700; color: #2ecc71; }
+        .menu-item { background: #1a1a1a; border-radius: 9px; padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .menu-item-name { font-size: 15px; font-weight: 600; }
+        .menu-item-price { font-size: 13px; color: #2ecc71; margin-top: 2px; }
+        .menu-item-aliases { font-size: 11px; color: #555; margin-top: 3px; }
+        .menu-item-actions { display: flex; gap: 6px; }
+        .icon-btn { background: none; border: none; cursor: pointer; padding: 6px; font-size: 17px; }
+        .add-form { background: #1a1a1a; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+        .form-row { margin-bottom: 11px; }
+        .form-label { font-size: 12px; color: #888; margin-bottom: 4px; display: block; }
+        .form-input { width: 100%; background: #252525; border: 1px solid #333; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 15px; outline: none; }
+        .form-input:focus { border-color: #3498db; }
+        .nav { display: flex; background: #161616; border-bottom: 1px solid #2a2a2a; }
+        .nav-btn { flex: 1; padding: 11px 4px; border: none; background: none; color: #666; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent; }
+        .nav-btn.active { color: #3498db; border-bottom-color: #3498db; }
+        .settings-row { background: #1a1a1a; border-radius: 9px; padding: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .settings-label { font-size: 14px; }
+        .settings-sub { font-size: 12px; color: #555; margin-top: 2px; }
+        .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #333; border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; }
+        input:checked + .toggle-slider { background: #3498db; }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
+        .action-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+        .export-btn { background: #27ae60; color: #fff; }
+        .clear-btn { background: #c0392b; color: #fff; }
+        .badge { background: #e74c3c; color: #fff; border-radius: 10px; padding: 2px 7px; font-size: 11px; }
+        .token-row { background: #1a1a2e; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; display: none; gap: 10px; align-items: center; }
+        .token-row.show { display: flex; }
+        .empty-state { text-align: center; color: #333; padding: 50px 20px; font-size: 15px; }
+        .section-title { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+        .alt-row { margin-top: 10px; display: none; }
+        .alt-label { font-size: 12px; color: #666; margin-bottom: 6px; }
+        .alt-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+        select.form-input { padding: 8px 10px; }
+        .hint-box { background: #1a1a2a; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: #556; line-height: 1.7; }
+        .hint-box b { color: #7a8; }
+        .addmenu-box { background: #1e2a1e; border-radius: 14px; padding: 16px; margin: 4px 0 12px; display: none; border: 1px solid #2a4a2a; }
+        .addmenu-box.show { display: block; }
+        .addmenu-title { font-size: 16px; margin-bottom: 4px; }
+        .addmenu-sub { font-size: 13px; color: #888; margin-bottom: 14px; }
+        .addmenu-price-row { display: none; margin-bottom: 12px; }
+        .addmenu-price-row.show { display: flex; gap: 8px; align-items: center; }
+        .price-input { flex: 1; background: #252525; border: 1px solid #3a5a3a; border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 18px; outline: none; }
+        .price-input:focus { border-color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🍜 Canteen</h1>
+    <span id="order-badge" class="badge" style="display:none">0</span>
+</div>
+
+<div class="nav">
+    <button class="nav-btn active" onclick="showPage('order')">🎤 Order</button>
+    <button class="nav-btn" onclick="showPage('log')">📋 Log</button>
+    <button class="nav-btn" onclick="showPage('menu')">🍽️ Menu</button>
+    <button class="nav-btn" onclick="showPage('settings')">⚙️ Settings</button>
+</div>
+
+<!-- ORDER PAGE -->
+<div id="page-order" class="page active">
+    <div id="token-row" class="token-row">
+        <span style="color:#888; font-size:13px; white-space:nowrap;">Token / Table:</span>
+        <input id="token-input" class="form-input" placeholder="Enter token..." />
+    </div>
+
+    <div class="mic-area">
+        <button class="mic-btn" id="mic-btn" onclick="toggleListen()">🎤</button>
+        <div class="status" id="status">Tap mic to speak</div>
+        <div class="heard-text" id="heard-text"></div>
+    </div>
+
+    <div class="hint-box">
+        <b>Multi-order:</b> "1 maggie 2 chai" → logs both<br>
+        <b>Cancel:</b> say "remove" or "hatao" → strikes last order<br>
+        <b>Hindi:</b> मैगी, चाय, समोसा all work
+    </div>
+
+    <div class="confirm-box" id="confirm-box">
+        <div class="confirm-item" id="confirm-text"></div>
+        <div class="confirm-btns">
+            <button class="btn btn-green" onclick="confirmOrder(true)">✓ Add</button>
+            <button class="btn btn-red" onclick="confirmOrder(false)">✗ Cancel</button>
+        </div>
+        <div class="alt-row" id="alt-row">
+            <div class="alt-label">Did you mean:</div>
+            <div class="alt-btns" id="alt-btns"></div>
+            <button class="btn btn-gray" style="margin-top:10px; font-size:13px;" onclick="confirmToAddMenu()">+ Not listed — Add to Menu</button>
+        </div>
+    </div>
+
+    <div class="addmenu-box" id="addmenu-box">
+        <div class="addmenu-title" id="addmenu-title"></div>
+        <div class="addmenu-sub">Not in menu. Add it?</div>
+        <div class="addmenu-price-row" id="addmenu-price-row">
+            <span style="color:#aaa; font-size:14px;">₹</span>
+            <input id="addmenu-price" class="price-input" type="number" placeholder="Enter price..." />
+        </div>
+        <div class="confirm-btns" id="addmenu-btns-1">
+            <button class="btn btn-green" onclick="showPriceInput()">+ Add to Menu</button>
+            <button class="btn btn-gray" onclick="dismissAddMenu()">Skip</button>
+        </div>
+        <div class="confirm-btns" id="addmenu-btns-2" style="display:none;">
+            <button class="btn btn-green" onclick="saveNewMenuItem()">✓ Save & Order</button>
+            <button class="btn btn-gray" onclick="dismissAddMenu()">Cancel</button>
+        </div>
+    </div>
+
+    <div class="total-bar">
+        <div>
+            <div class="total-label">Session Total</div>
+            <div style="font-size:12px; color:#555;" id="order-count-text">0 orders</div>
+        </div>
+        <div class="total-amount" id="session-total">₹0</div>
+    </div>
+</div>
+
+<!-- LOG PAGE -->
+<div id="page-log" class="page">
+    <div id="log-empty" class="empty-state">No orders yet</div>
+    <div id="orders-container"></div>
+    <div class="total-bar">
+        <div>
+            <div class="total-label">Total (active)</div>
+            <div style="font-size:12px; color:#555;" id="log-count-text">0 orders</div>
+        </div>
+        <div class="total-amount" id="log-total">₹0</div>
+    </div>
+</div>
+
+<!-- MENU PAGE -->
+<div id="page-menu" class="page">
+    <div class="section-title">Add Item</div>
+    <div class="add-form">
+        <div class="form-row">
+            <label class="form-label">Item Name</label>
+            <input id="new-name" class="form-input" placeholder="e.g. Maggie, Chai, Samosa" />
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">Price (₹)</label>
+            <input id="new-price" class="form-input" type="number" placeholder="e.g. 20" />
+        </div>
+        <button class="btn btn-blue" style="width:100%; margin-top:12px;" onclick="addMenuItem()">+ Add to Menu</button>
+    </div>
+    <div class="section-title">Menu Items</div>
+    <div id="menu-list"></div>
+</div>
+
+<!-- SETTINGS PAGE -->
+<div id="page-settings" class="page">
+    <div class="section-title">Features</div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-label">Token / Table Tracking</div>
+            <div class="settings-sub">Attach token number to each order</div>
+        </div>
+        <label class="toggle">
+            <input type="checkbox" id="toggle-token" onchange="saveSettings()">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-label">Always Confirm Order</div>
+            <div class="settings-sub">Confirm before logging (slower but safer)</div>
+        </div>
+        <label class="toggle">
+            <input type="checkbox" id="toggle-confirm" onchange="saveSettings()">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+
+    <div class="settings-row">
+        <div>
+            <div class="settings-label">Voice Language</div>
+            <div class="settings-sub">Hinglish recommended</div>
+        </div>
+        <select id="voice-lang" class="form-input" style="width:auto;" onchange="saveSettings()">
+            <option value="hi-IN">Hindi / Hinglish</option>
+            <option value="en-IN">English (India)</option>
+        </select>
+    </div>
+
+    <div class="section-title">Data</div>
+    <button class="action-btn export-btn" onclick="exportCSV()">📊 Export to Excel (CSV)</button>
+    <button class="action-btn clear-btn" onclick="clearOrders()">🗑️ Clear All Orders</button>
+
+    <div class="section-title">Learning</div>
+    <div class="settings-row">
+        <div>
+            <div class="settings-label">Learned Voice Aliases</div>
+            <div class="settings-sub" id="alias-count">0 custom mappings</div>
+        </div>
+        <button class="btn btn-gray" style="flex:0; padding:8px 14px;" onclick="clearAliases()">Reset</button>
+    </div>
+</div>
+
+<script>
+// ===== STATE =====
+let menu     = JSON.parse(localStorage.getItem('c_menu')     || 'null');
+let orders   = JSON.parse(localStorage.getItem('c_orders')   || '[]');
+let aliases  = JSON.parse(localStorage.getItem('c_aliases')  || '{}');
+let settings = JSON.parse(localStorage.getItem('c_settings') || '{"token":false,"confirm":false,"lang":"hi-IN"}');
+
+if (!menu) {
+    menu = [
+        { id:1, name:'Maggie',        price:20 },
+        { id:2, name:'Chai',          price:10 },
+        { id:3, name:'Coffee',        price:15 },
+        { id:4, name:'Samosa',        price:10 },
+        { id:5, name:'Bread Omelette',price:30 },
+    ];
+    saveMenu();
+}
+
+// ===== AUDIO =====
+function playPing() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 1046; o.type = 'sine';
+        g.gain.setValueAtTime(0.3, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        o.start(); o.stop(ctx.currentTime + 0.18);
+    } catch(e) {}
+}
+
+function playCancelSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 440; o.type = 'sine';
+        g.gain.setValueAtTime(0.2, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+    } catch(e) {}
+}
+
+// ===== DEVANAGARI ROMANIZER =====
+// Converts Hindi script to rough Roman so fuzzy match works across scripts
+const DEVA = {
+    'अ':'a','आ':'aa','इ':'i','ई':'ii','उ':'u','ऊ':'uu','ए':'e','ऐ':'e','ओ':'o','औ':'o','ऑ':'o',
+    'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'n',
+    'च':'ch','छ':'ch','ज':'j','झ':'jh','ञ':'n',
+    'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+    'त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+    'प':'p','फ':'f','ब':'b','भ':'bh','म':'m',
+    'य':'y','र':'r','ल':'l','व':'v','ळ':'l',
+    'श':'sh','ष':'sh','स':'s','ह':'h',
+    'क्ष':'x','त्र':'tr','ज्ञ':'gy',
+    'ा':'a','ि':'i','ी':'i','ु':'u','ू':'u',
+    'े':'e','ै':'e','ो':'o','ौ':'o','ॉ':'o',
+    '्':'','ं':'n','ँ':'','ः':'',
+    '०':'0','१':'1','२':'2','३':'3','४':'4','५':'5','६':'6','७':'7','८':'8','९':'9',
+};
+
+function romanize(text) {
+    if (!/[ऀ-ॿ]/.test(text)) return text.toLowerCase();
+    let r = '';
+    for (const ch of text) r += (DEVA[ch] !== undefined ? DEVA[ch] : ch);
+    return r.toLowerCase();
+}
+
+// ===== CANCEL / REMOVE KEYWORDS =====
+const CANCEL_WORDS = ['remove','hatao','cancel','hata do','last hatao','remove last',
+                      'cancel last','last cancel','wapas','wapas karo','delete','हटाओ',
+                      'हटा दो','कैंसिल','रिमूव','वापस'];
+
+function isCancelCommand(text) {
+    const t = text.toLowerCase().trim();
+    return CANCEL_WORDS.some(w => t.includes(w));
+}
+
+// ===== NUMBER WORDS =====
+const NUM_WORDS = {
+    ek:1,एक:1,one:1,
+    do:2,दो:2,two:2,
+    teen:3,तीन:3,three:3,
+    char:4,चार:4,four:4,
+    paanch:5,पांच:5,पाँच:5,five:5,
+    chhe:6,six:6,saat:7,seven:7,aath:8,eight:8,nau:9,nine:9,das:10,ten:10,
+};
+
+// ===== SPLIT MULTI-ITEM INPUT =====
+// "1 maggie 2 chai" / "एक मैगी दो चाय" → segments per item
+// Splits on any number word/digit that appears after content already accumulated
+const NUM_SET = new Set([
+    'ek','do','teen','char','paanch','chhe','saat','aath','nau','das',
+    'one','two','three','four','five','six','seven','eight','nine','ten',
+    'एक','दो','तीन','चार','पांच','पाँच','छह','सात','आठ','नौ','दस',
+]);
+
+function splitOrders(text) {
+    const words = text.trim().split(/\s+/);
+    const segments = [];
+    let current = [];
+
+    for (const word of words) {
+        const isNum = /^\d+$/.test(word) || NUM_SET.has(word.toLowerCase());
+        if (isNum && current.length > 0) {
+            segments.push(current.join(' '));
+            current = [word];
+        } else {
+            current.push(word);
+        }
+    }
+    if (current.length > 0) segments.push(current.join(' '));
+
+    return segments.filter(s => s.trim().length > 0);
+}
+
+// ===== PARSE SINGLE SEGMENT (qty + item text) =====
+function parseSegment(text) {
+    const words = text.trim().split(/\s+/);
+    const first = words[0].toLowerCase();
+    let qty = 1, itemText = text.trim();
+
+    if (!isNaN(first) && first !== '') {
+        qty = parseInt(first);
+        itemText = words.slice(1).join(' ');
+    } else if (NUM_WORDS[first]) {
+        qty = NUM_WORDS[first];
+        itemText = words.slice(1).join(' ');
+    }
+    return { qty, itemText: itemText.trim() };
+}
+
+// ===== SPEECH =====
+let recognition = null, isListening = false, pendingOrder = null;
+
+function setupSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { document.getElementById('status').textContent = 'Voice not supported — use Chrome'; return; }
+    recognition = new SR();
+    recognition.lang = settings.lang || 'hi-IN';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart  = () => {
+        isListening = true;
+        setBtn('listening', '🎙️');
+        document.getElementById('status').textContent = 'Listening...';
+        document.getElementById('heard-text').textContent = '';
+    };
+
+    recognition.onresult = (e) => {
+        let interim = '', final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) final += e.results[i][0].transcript;
+            else interim += e.results[i][0].transcript;
+        }
+        // Show interim immediately for speed feel
+        document.getElementById('heard-text').textContent = final || interim;
+        if (final) processInput(final.trim());
+    };
+
+    recognition.onerror  = (e) => {
+        isListening = false;
+        setBtn('idle', '🎤');
+        document.getElementById('status').textContent = e.error === 'no-speech' ? 'No speech detected' : 'Try again';
+    };
+    recognition.onend = () => { isListening = false; setBtn('idle', '🎤'); };
+}
+
+function toggleListen() {
+    if (!recognition) setupSpeech();
+    if (!recognition) return;
+    if (isListening) { recognition.stop(); }
+    else { recognition.lang = settings.lang || 'hi-IN'; try { recognition.start(); } catch(e){} }
+}
+
+function setBtn(state, icon) {
+    const b = document.getElementById('mic-btn');
+    b.className = 'mic-btn' + (state==='listening' ? ' listening' : state==='success' ? ' success' : state==='cancel' ? ' cancel-flash' : '');
+    b.textContent = icon;
+}
+
+// ===== PROCESS VOICE INPUT =====
+function processInput(rawText) {
+    isListening = false;
+    setBtn('idle', '🎤');
+    const text = rawText.trim();
+
+    // Cancel command
+    if (isCancelCommand(text)) {
+        cancelLastOrder();
+        return;
+    }
+
+    // Split into multiple order segments
+    const segments = splitOrders(text);
+
+    if (segments.length > 1) {
+        // Multi-item: log all silently (no confirm dialog per item — too slow)
+        let logged = 0, failed = [];
+        segments.forEach(seg => {
+            const { qty, itemText } = parseSegment(seg);
+            const resolved = resolveAlias(itemText);
+            const match = bestMatch(resolved);
+            if (match && match.score > 0.4) { addOrder(match, qty, itemText, true); logged++; }
+            else failed.push(itemText);
+        });
+        let msg = `${logged} item${logged !== 1 ? 's' : ''} added`;
+        if (failed.length) msg += ` · not found: ${failed.join(', ')}`;
+        document.getElementById('status').textContent = msg;
+        document.getElementById('heard-text').textContent = '';
+        if (logged > 0) { setBtn('success', '✓'); setTimeout(() => setBtn('idle', '🎤'), 700); }
+        return;
+    }
+
+    // Single item
+    const { qty, itemText } = parseSegment(text);
+    const resolved = resolveAlias(itemText);
+    const match = bestMatch(resolved);
+
+    if (!match) {
+        showAddMenu(itemText, qty);
+        return;
+    }
+
+    pendingOrder = { item: match, qty, heardAs: itemText };
+
+    // Auto-log if confident and confirm-mode is off
+    if (!settings.confirm && match.score >= 0.6) {
+        learnAlias(itemText, match.name);
+        addOrder(match, qty, itemText, false);
+    } else {
+        showConfirm(match, qty, itemText, match.score < 0.65);
+    }
+}
+
+// ===== ALIAS HANDLING =====
+function resolveAlias(text) {
+    const t = text.toLowerCase();
+    return aliases[t] || aliases[romanize(t)] || t;
+}
+
+function learnAlias(heardAs, itemName) {
+    const h = heardAs.toLowerCase();
+    const n = itemName.toLowerCase();
+    const hr = romanize(h);
+    if (h !== n && !aliases[h]) {
+        aliases[h] = n;
+        if (hr !== h && !aliases[hr]) aliases[hr] = n;
+        localStorage.setItem('c_aliases', JSON.stringify(aliases));
+        updateAliasCount();
+    }
+}
+
+// ===== MATCHING =====
+function bestMatch(text) {
+    if (!text) return null;
+    const normText  = romanize(text.toLowerCase());
+    let best = null, top = 0;
+
+    for (const item of menu) {
+        const n    = item.name.toLowerCase();
+        const normN = romanize(n);
+
+        // Try multiple comparison strategies
+        let score = Math.max(
+            jaccard(normText, normN),      // romanized vs romanized
+            jaccard(text.toLowerCase(), n), // raw vs raw
+            jaccard(normText, n),           // romanized vs English
+        );
+
+        // Boost for substring containment
+        if (normN.includes(normText) || normText.includes(normN)) score = Math.max(score, 0.82);
+        if (n.includes(text.toLowerCase()) || text.toLowerCase().includes(n)) score = Math.max(score, 0.82);
+        if (normN === normText || n === text.toLowerCase()) score = 1;
+
+        if (score > top) { top = score; best = { ...item, score }; }
+    }
+    return top > 0.35 ? best : null;
+}
+
+function jaccard(a, b) {
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const sa = new Set(a), sb = new Set(b);
+    const inter = [...sa].filter(x => sb.has(x)).length;
+    return inter / (sa.size + sb.size - inter);
+}
+
+// ===== CANCEL LAST ORDER =====
+function cancelLastOrder() {
+    // Find last non-cancelled order
+    for (let i = orders.length - 1; i >= 0; i--) {
+        if (!orders[i].cancelled) {
+            orders[i].cancelled = true;
+            localStorage.setItem('c_orders', JSON.stringify(orders));
+            playCancelSound();
+            setBtn('cancel', '↩');
+            document.getElementById('status').textContent = `Cancelled: ${orders[i].item}`;
+            document.getElementById('heard-text').textContent = '';
+            setTimeout(() => setBtn('idle', '🎤'), 700);
+            updateTotals();
+            if (document.getElementById('page-log').classList.contains('active')) renderOrders();
+            return;
+        }
+    }
+    document.getElementById('status').textContent = 'Nothing to cancel';
+}
+
+// ===== ADD TO MENU FROM VOICE =====
+let pendingNewItem = null;
+
+function confirmToAddMenu() {
+    // Called from inside the confirm box — switch to add-menu flow
+    document.getElementById('confirm-box').classList.remove('show');
+    if (pendingOrder) showAddMenu(pendingOrder.heardAs, pendingOrder.qty);
+}
+
+function showAddMenu(itemText, qty) {
+    pendingNewItem = { name: itemText, qty };
+    document.getElementById('addmenu-title').textContent = `"${itemText}"`;
+    document.getElementById('addmenu-price-row').className = 'addmenu-price-row';
+    document.getElementById('addmenu-btns-1').style.display = 'flex';
+    document.getElementById('addmenu-btns-2').style.display = 'none';
+    document.getElementById('addmenu-price').value = '';
+    document.getElementById('addmenu-box').classList.add('show');
+    document.getElementById('status').textContent = `"${itemText}" not found`;
+    document.getElementById('heard-text').textContent = '';
+}
+
+function showPriceInput() {
+    document.getElementById('addmenu-price-row').className = 'addmenu-price-row show';
+    document.getElementById('addmenu-btns-1').style.display = 'none';
+    document.getElementById('addmenu-btns-2').style.display = 'flex';
+    setTimeout(() => document.getElementById('addmenu-price').focus(), 100);
+}
+
+function dismissAddMenu() {
+    document.getElementById('addmenu-box').classList.remove('show');
+    document.getElementById('status').textContent = 'Tap mic to speak';
+    pendingNewItem = null;
+}
+
+function saveNewMenuItem() {
+    const price = parseFloat(document.getElementById('addmenu-price').value);
+    if (!pendingNewItem || isNaN(price) || price < 0) { alert('Enter a valid price'); return; }
+
+    // Capitalise first letter of each word
+    const name = pendingNewItem.name.replace(/\b\w/g, c => c.toUpperCase());
+    const newItem = { id: Date.now(), name, price };
+    menu.push(newItem);
+    saveMenu();
+
+    document.getElementById('addmenu-box').classList.remove('show');
+    playPing();
+    addOrder(newItem, pendingNewItem.qty, pendingNewItem.name, false);
+    document.getElementById('status').textContent = `"${name}" added to menu & ordered`;
+    pendingNewItem = null;
+}
+
+// ===== CONFIRM UI =====
+function showConfirm(item, qty, heardAs, showAlts) {
+    document.getElementById('confirm-text').innerHTML =
+        `<b>${qty}× ${item.name}</b> &nbsp;₹${item.price * qty}<br><small style="color:#666">Heard: "${heardAs}"</small>`;
+
+    const altRow = document.getElementById('alt-row');
+    if (showAlts) {
+        const altsDiv = document.getElementById('alt-btns');
+        altsDiv.innerHTML = '';
+        menu.filter(m => m.id !== item.id).slice(0, 4).forEach(alt => {
+            const b = document.createElement('button');
+            b.className = 'btn btn-gray'; b.style.flex = '0';
+            b.textContent = alt.name;
+            b.onclick = () => { pendingOrder.item = { ...alt, score: 1 }; confirmOrder(true); };
+            altsDiv.appendChild(b);
+        });
+        altRow.style.display = 'block';
+    } else { altRow.style.display = 'none'; }
+
+    document.getElementById('confirm-box').classList.add('show');
+}
+
+function confirmOrder(yes) {
+    document.getElementById('confirm-box').classList.remove('show');
+    if (!pendingOrder) return;
+    if (yes) {
+        learnAlias(pendingOrder.heardAs, pendingOrder.item.name);
+        addOrder(pendingOrder.item, pendingOrder.qty, pendingOrder.heardAs, false);
+    } else {
+        document.getElementById('status').textContent = 'Cancelled';
+    }
+    pendingOrder = null;
+}
+
+// ===== ADD ORDER =====
+function addOrder(item, qty, heardAs, silent) {
+    const token = settings.token ? (document.getElementById('token-input').value.trim() || '') : '';
+    const now = new Date();
+    orders.push({
+        id:        Date.now() + Math.random(), // unique even for rapid multi-orders
+        item:      item.name,
+        price:     item.price,
+        qty,
+        total:     item.price * qty,
+        token,
+        cancelled: false,
+        time:      now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }),
+        date:      now.toLocaleDateString('en-GB').replace(/\//g,'-'),
+    });
+    localStorage.setItem('c_orders', JSON.stringify(orders));
+
+    if (!silent) {
+        playPing();
+        setBtn('success', '✓');
+        document.getElementById('status').textContent = `${qty}× ${item.name}  ₹${item.price * qty}`;
+        document.getElementById('heard-text').textContent = '';
+        setTimeout(() => setBtn('idle', '🎤'), 600);
+    } else {
+        // For multi-order, just play a quick tick
+        playPing();
+    }
+
+    updateTotals();
+    if (document.getElementById('page-log').classList.contains('active')) renderOrders();
+}
+
+// ===== RENDER ORDERS =====
+function renderOrders() {
+    const c = document.getElementById('orders-container');
+    const e = document.getElementById('log-empty');
+    if (!orders.length) { e.style.display = 'block'; c.innerHTML = ''; return; }
+    e.style.display = 'none';
+    c.innerHTML = [...orders].reverse().map(o => `
+        <div class="order-item${o.cancelled ? ' cancelled' : ''}">
+            <div>
+                <div class="order-name">${o.qty}× ${o.item}${o.token ? ` <span style="color:#555;font-size:11px;">[${o.token}]</span>` : ''}</div>
+                <div class="order-meta">${o.time} · ${o.date}${o.cancelled ? ' · <span style="color:#e74c3c">cancelled</span>' : ''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <div class="order-price">₹${o.total}</div>
+                <button class="order-del" onclick="hardDeleteOrder('${o.id}')">×</button>
+            </div>
+        </div>`).join('');
+}
+
+function hardDeleteOrder(id) {
+    orders = orders.filter(o => String(o.id) !== String(id));
+    localStorage.setItem('c_orders', JSON.stringify(orders));
+    updateTotals(); renderOrders();
+}
+
+// ===== RENDER MENU =====
+function renderMenu() {
+    const list = document.getElementById('menu-list');
+    if (!menu.length) { list.innerHTML = '<div class="empty-state">No items yet</div>'; return; }
+    list.innerHTML = menu.map(item => {
+        const learned = Object.entries(aliases)
+            .filter(([k,v]) => v === item.name.toLowerCase())
+            .map(([k]) => k).slice(0, 5);
+        return `
+        <div class="menu-item">
+            <div style="flex:1">
+                <div class="menu-item-name">${item.name}</div>
+                <div class="menu-item-price">₹${item.price}</div>
+                ${learned.length ? `<div class="menu-item-aliases">Also hears: ${learned.join(', ')}</div>` : ''}
+            </div>
+            <div class="menu-item-actions">
+                <button class="icon-btn" onclick="editItem(${item.id})">✏️</button>
+                <button class="icon-btn" onclick="deleteItem(${item.id})">🗑️</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ===== MENU CRUD =====
+function addMenuItem() {
+    const name  = document.getElementById('new-name').value.trim();
+    const price = parseFloat(document.getElementById('new-price').value);
+    if (!name || isNaN(price) || price < 0) { alert('Enter a valid name and price'); return; }
+    menu.push({ id: Date.now(), name, price });
+    saveMenu();
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-price').value = '';
+    renderMenu();
+}
+
+function editItem(id) {
+    const item = menu.find(m => m.id === id); if (!item) return;
+    const n = prompt('Item name:', item.name); if (!n) return;
+    const p = parseFloat(prompt('Price (₹):', item.price)); if (isNaN(p)) return;
+    item.name = n.trim(); item.price = p;
+    saveMenu(); renderMenu();
+}
+
+function deleteItem(id) {
+    if (!confirm('Delete this item?')) return;
+    menu = menu.filter(m => m.id !== id);
+    saveMenu(); renderMenu();
+}
+
+function saveMenu() { localStorage.setItem('c_menu', JSON.stringify(menu)); }
+
+// ===== TOTALS =====
+function updateTotals() {
+    const active = orders.filter(o => !o.cancelled);
+    const total  = active.reduce((s, o) => s + o.total, 0);
+    document.getElementById('session-total').textContent   = `₹${total}`;
+    document.getElementById('log-total').textContent       = `₹${total}`;
+    document.getElementById('order-count-text').textContent = `${active.length} orders`;
+    document.getElementById('log-count-text').textContent   = `${active.length} active`;
+    const badge = document.getElementById('order-badge');
+    badge.textContent   = active.length;
+    badge.style.display = active.length ? 'inline' : 'none';
+}
+
+// ===== SETTINGS =====
+function saveSettings() {
+    settings.token   = document.getElementById('toggle-token').checked;
+    settings.confirm = document.getElementById('toggle-confirm').checked;
+    settings.lang    = document.getElementById('voice-lang').value;
+    localStorage.setItem('c_settings', JSON.stringify(settings));
+    document.getElementById('token-row').className = 'token-row' + (settings.token ? ' show' : '');
+    if (recognition) recognition.lang = settings.lang;
+}
+
+function loadSettings() {
+    document.getElementById('toggle-token').checked   = !!settings.token;
+    document.getElementById('toggle-confirm').checked = !!settings.confirm;
+    document.getElementById('voice-lang').value        = settings.lang || 'hi-IN';
+    document.getElementById('token-row').className     = 'token-row' + (settings.token ? ' show' : '');
+    updateAliasCount();
+}
+
+function updateAliasCount() {
+    document.getElementById('alias-count').textContent = `${Object.keys(aliases).length} custom mappings`;
+}
+
+function clearAliases() {
+    if (!confirm('Reset all learned voice mappings?')) return;
+    aliases = {}; localStorage.setItem('c_aliases', '{}');
+    updateAliasCount(); renderMenu();
+}
+
+// ===== EXPORT =====
+function exportCSV() {
+    if (!orders.length) { alert('No orders to export'); return; }
+    const rows = [['Date','Time','Item','Qty','Unit Price','Total','Token','Status']];
+    orders.forEach(o => rows.push([
+        o.date, o.time, o.item, o.qty, o.price, o.total,
+        o.token || '', o.cancelled ? 'CANCELLED' : 'Active'
+    ]));
+    const csv  = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `canteen_${new Date().toLocaleDateString('en-GB').replace(/\//g,'-')}.csv`;
+    a.click();
+}
+
+function clearOrders() {
+    if (!confirm('Clear all orders? Export first if needed.')) return;
+    orders = []; localStorage.setItem('c_orders', '[]');
+    updateTotals(); renderOrders();
+}
+
+// ===== NAV =====
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.querySelectorAll('.nav-btn')[['order','log','menu','settings'].indexOf(name)].classList.add('active');
+    if (name === 'menu') renderMenu();
+    if (name === 'log')  renderOrders();
+}
+
+// ===== INIT =====
+loadSettings();
+updateTotals();
+setupSpeech();
+</script>
+</body>
+</html>
