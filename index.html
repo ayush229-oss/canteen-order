@@ -308,9 +308,9 @@ function setupSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('Use Chrome for voice'); return null; }
     const r = new SR();
-    r.lang = settings.lang || 'hi-IN';
-    r.continuous = false;
-    r.interimResults = true;
+    r.lang            = settings.lang || 'hi-IN';
+    r.continuous      = true;   // keeps listening across pauses — critical for multi-item
+    r.interimResults  = true;
     r.maxAlternatives = 1;
 
     r.onresult = (e) => {
@@ -320,16 +320,20 @@ function setupSpeech() {
             else interim += e.results[i][0].transcript;
         }
         document.getElementById('live-heard').textContent = final || interim;
+        // Each final phrase is processed immediately — works for both
+        // "1 maggie 2 chai" (one breath) and "1 maggie … 2 chai" (with pause)
         if (final) processInput(final.trim());
     };
 
     r.onerror = (e) => {
-        if (e.error === 'aborted') return;
-        if (sessionActive) restartTimer = setTimeout(startListening, 400);
+        if (e.error === 'aborted' || e.error === 'no-speech') return;
+        // On real error — restart after short delay
+        if (sessionActive) restartTimer = setTimeout(startListening, 600);
     };
 
     r.onend = () => {
-        // Auto-restart if session still active and no confirm pending
+        // continuous=true only fires onend on timeout/error, not after each phrase
+        // Restart if session still active and no confirm box open
         if (sessionActive && !document.getElementById('confirm-box').classList.contains('show')) {
             restartTimer = setTimeout(startListening, 300);
         }
@@ -340,6 +344,8 @@ function setupSpeech() {
 
 function startListening() {
     if (!sessionActive) return;
+    // Reuse existing recognition if still running
+    if (recognition) { try { recognition.abort(); } catch(e){} }
     recognition = setupSpeech();
     if (!recognition) return;
     document.getElementById('live-status-text').textContent = 'Listening...';
